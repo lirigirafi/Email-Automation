@@ -19,9 +19,9 @@ class Config:
         self._load_env()
     
     def _load_config(self) -> dict:
-        """Load configuration from config.json"""
+        """Load configuration from config.json (UTF-8 safe)"""
         if self.config_file.exists():
-            with open(self.config_file, 'r') as f:
+            with open(self.config_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
         return {}
     
