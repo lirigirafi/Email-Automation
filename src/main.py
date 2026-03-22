@@ -57,7 +57,7 @@ class EmailAgent:
         print()
         return True
     
-    def process_emails(self) -> List[dict]:
+    def process_emails(self, minutes: int = None) -> List[dict]:
         """
         Main workflow:
         1. Fetch new emails from allowed authors
@@ -66,31 +66,25 @@ class EmailAgent:
         """
         print("📧 Processing emails...")
         print(f"  Allowed authors: {len(self.config.allowed_authors)}")
-        
-        # Fetch emails
+        # Use passed minutes or default to config interval
+        interval_minutes = minutes if minutes is not None else self.config.schedule_interval_minutes
         emails = self.gmail_handler.get_filtered_emails(
             self.config.allowed_authors,
-            days=self.config.email_filters.get('daysToCheck', 1)
+            minutes=interval_minutes
         )
-        
         if not emails:
             print("  ✓ No new emails found")
             return []
-        
         print(f"  ✓ Found {len(emails)} email(s)")
-        
         # Filter out already processed emails
         new_emails = []
         for email in emails:
             if not self.persistence.is_processed(email['id']):
                 new_emails.append(email)
-        
         if not new_emails:
             print("  ✓ All emails already processed")
             return []
-        
         print(f"  ✓ {len(new_emails)} new email(s) to process")
-        
         # Generate drafts
         print("\n✍️  Generating drafts...")
         drafts = []
@@ -99,7 +93,6 @@ class EmailAgent:
             drafts.append(draft)
             print(f"  ✓ Draft for: {email['sender']}")
             self.persistence.mark_processed(email['id'])
-        
         return drafts
     
     def present_drafts(self, drafts: List[dict]):
@@ -158,9 +151,9 @@ class EmailAgent:
             self.present_drafts(drafts)
     
     def run_manual(self):
-        """Manually trigger email processing"""
-        print("\n🚀 Manual trigger started")
-        drafts = self.process_emails()
+        """Manually trigger email processing for the last 2 minutes"""
+        print("\n🚀 Manual trigger started (last 2 minutes)")
+        drafts = self.process_emails(minutes=2)
         if drafts:
             self.present_drafts(drafts)
         else:

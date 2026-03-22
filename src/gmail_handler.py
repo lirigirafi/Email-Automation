@@ -63,10 +63,11 @@ class GmailHandler:
             print(f"✗ Gmail authentication failed: {str(e)}")
             return False
     
-    def get_filtered_emails(self, allowed_authors: List[str], days: int = 1) -> List[Dict]:
+    def get_filtered_emails(self, allowed_authors: List[str], minutes: int = 120) -> List[Dict]:
         """
-        Fetch unread emails from allowed authors
-        Skips emails with attachments
+        Fetch unread emails from allowed authors from the last N minutes.
+        Skips emails with attachments.
+        Adds detailed logging for debugging.
         """
         try:
             if not self.service:
@@ -75,7 +76,8 @@ class GmailHandler:
             
             # Build query
             author_query = " OR ".join([f'from:{author}' for author in allowed_authors])
-            query = f'is:unread {author_query} newer_than:{days}d'
+            query = f'is:unread {author_query} newer_than:{minutes}m'
+            print(f"[DEBUG] Gmail query: {query}")
             
             # List messages
             results = self.service.users().messages().list(
@@ -85,13 +87,19 @@ class GmailHandler:
             ).execute()
             
             messages = results.get('messages', [])
+            print(f"[DEBUG] Gmail returned {len(messages)} message(s) matching query.")
             filtered_emails = []
             
             for message in messages:
+                print(f"[DEBUG] Checking message ID: {message['id']}")
                 email_data = self._get_message_details(message['id'])
                 if email_data:
+                    print(f"[DEBUG] Accepted: {email_data.get('sender','?')} | {email_data.get('subject','?')}")
                     filtered_emails.append(email_data)
+                else:
+                    print(f"[DEBUG] Skipped message ID: {message['id']} (see above for reason)")
             
+            print(f"[DEBUG] {len(filtered_emails)} email(s) accepted after filtering.")
             return filtered_emails
             
         except Exception as e:
@@ -99,7 +107,7 @@ class GmailHandler:
             return []
     
     def _get_message_details(self, message_id: str) -> Optional[Dict]:
-        """Fetch detailed information for a single message"""
+        """Fetch detailed information for a single message, with debug logging"""
         try:
             message = self.service.users().messages().get(
                 userId='me',
@@ -113,6 +121,7 @@ class GmailHandler:
             body = self._get_message_body(message['payload'])
             has_attachments = message['payload'].get('parts') is not None
             
+            print(f"[DEBUG] Message details: sender={sender}, subject={subject}, has_attachments={has_attachments}")
             # Skip if has attachments
             if has_attachments:
                 print(f"⚠ Skipping email from {sender} (has attachments) - flagged for manual review")
