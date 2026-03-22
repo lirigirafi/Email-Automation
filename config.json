@@ -1,12 +1,14 @@
 {
   "allowedAuthors": [
-    "liri.girafi@gmail.com"
+    "liri.girafi@gmail.com",
+    "Alljobs@alljob.co.il",
+    "אני"
   ],
-  "draftSettings": {
     "tone": "friendly_professional",
     "maxDraftLength": 500,
     "includeGoogleFontHint": false
   },
+
   "emailFilters": {
     "skipAttachments": true,
     "excludeLabels": ["archive", "spam"],
@@ -17,4 +19,3 @@
     "autoOpenDraftEditor": true,
     "notificationOnNewDraft": true
   }
-}

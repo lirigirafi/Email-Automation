@@ -65,6 +65,7 @@ class EmailAgent:
         3. Present to user for approval
         """
         print("📧 Processing emails...")
+        print(f"DEBUG allowedAuthors: {self.config.allowed_authors}")
         print(f"  Allowed authors: {len(self.config.allowed_authors)}")
         # Use passed minutes or default to config interval
         interval_minutes = minutes if minutes is not None else self.config.schedule_interval_minutes

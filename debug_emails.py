@@ -44,9 +44,9 @@ def debug_emails():
     print("✅ Authenticated successfully")
     print()
 
-    # Get emails with fresh config
-    emails = handler.get_filtered_emails(fresh_config.allowed_authors, days=1)
-    print(f"📧 Found {len(emails)} emails matching criteria")
+    # Get emails with fresh config (last 2 minutes)
+    emails = handler.get_filtered_emails(fresh_config.allowed_authors, minutes=2)
+    print(f"📧 Found {len(emails)} emails matching criteria (last 2 minutes)")
     print()
 
     if emails:
