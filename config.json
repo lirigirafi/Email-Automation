@@ -1,0 +1,20 @@
+{
+  "allowedAuthors": [
+    "liri.girafi@gmail.com"
+  ],
+  "draftSettings": {
+    "tone": "friendly_professional",
+    "maxDraftLength": 500,
+    "includeGoogleFontHint": false
+  },
+  "emailFilters": {
+    "skipAttachments": true,
+    "excludeLabels": ["archive", "spam"],
+    "daysToCheck": 1
+  },
+  "vscodeIntegration": {
+    "enableWebview": true,
+    "autoOpenDraftEditor": true,
+    "notificationOnNewDraft": true
+  }
+}
