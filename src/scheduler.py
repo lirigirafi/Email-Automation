@@ -41,7 +41,18 @@ class EmailScheduler:
         """Schedule job at multiple times"""
         for time_str in times:
             self.schedule_daily(time_str, job_func)
-    
+
+    def schedule_every_minutes(self, interval_minutes: int, job_func: Callable):
+        """Schedule job to run every N minutes"""
+        try:
+            job = schedule.every(interval_minutes).minutes.do(job_func)
+            self.jobs.append(job)
+            print(f"✓ Scheduled job every {interval_minutes} minute(s)")
+            return job
+        except Exception as e:
+            print(f"Error scheduling every {interval_minutes} minutes: {str(e)}")
+            return None
+
     def run_manual(self, job_func: Callable) -> bool:
         """Run job immediately (manual trigger)"""
         try:

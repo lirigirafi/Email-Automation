@@ -35,6 +35,7 @@ class Config:
         self.processed_emails_db = os.getenv('PROCESSED_EMAILS_DB', './data/processed_emails.json')
         self.schedule_time_1 = os.getenv('SCHEDULE_TIME_1', '09:00')
         self.schedule_time_2 = os.getenv('SCHEDULE_TIME_2', '17:00')
+        self.schedule_interval_minutes = int(os.getenv('SCHEDULE_INTERVAL_MINUTES', '2'))
         self.timezone = os.getenv('TIMEZONE', 'America/New_York')
     
     @property

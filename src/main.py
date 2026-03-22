@@ -142,14 +142,11 @@ class EmailAgent:
         print()
     
     def schedule_runs(self):
-        """Schedule automatic runs at configured times"""
+        """Schedule automatic runs at configured interval (default every 2 minutes)"""
         print("⏰ Scheduling automated runs...")
         
-        times = [self.config.schedule_time_1, self.config.schedule_time_2]
-        
-        for time in times:
-            self.scheduler.schedule_daily(time, self._scheduled_job)
-            print(f"  ✓ Scheduled at {time}")
+        interval = self.config.schedule_interval_minutes
+        self.scheduler.schedule_every_minutes(interval, self._scheduled_job)
         
         print(f"\nScheduler watching (timezone: {self.config.timezone})")
         print(f"Next run: {self.scheduler.get_next_run()}")
@@ -175,8 +172,9 @@ class EmailAgent:
             return
         
         self.schedule_runs()
+        # check every 10 seconds to keep 2-min interval reliable
         try:
-            self.scheduler.start_scheduler()
+            self.scheduler.start_scheduler(interval=10)
         except KeyboardInterrupt:
             print("\n✓ Agent stopped")
 
