@@ -4,6 +4,7 @@ Main entry point and orchestration logic
 """
 import sys
 import argparse
+import webbrowser
 from pathlib import Path
 from typing import List
 
@@ -12,10 +13,9 @@ sys.path.insert(0, str(Path(__file__).parent))
 
 from config import config
 from gmail_handler import GmailHandler
-from draft_generator import DraftGenerator
+from ai_draft_generator import AIDraftGenerator
 from scheduler import EmailScheduler
 from persistence import EmailPersistence
-from vscode_handler import VSCodeHandler
 
 
 class EmailAgent:
@@ -29,9 +29,8 @@ class EmailAgent:
             config.google_client_secret,
             config.google_redirect_uri
         )
-        self.draft_generator = DraftGenerator(sender_name="Your Name")
+        self.draft_generator = AIDraftGenerator()
         self.scheduler = EmailScheduler(config.timezone)
-        self.vscode_handler = VSCodeHandler(config.draft_output_path)
         self.authenticated = False
     
     def initialize(self) -> bool:
@@ -97,43 +96,34 @@ class EmailAgent:
         return drafts
     
     def present_drafts(self, drafts: List[dict]):
-        """Present drafts to user for approval"""
+        """Save each draft to Gmail and open it in the browser."""
         if not drafts:
-            print("No drafts to present")
             return
-        
-        print("\n" + "=" * 60)
-        print("📋 DRAFT APPROVAL WORKFLOW")
-        print("=" * 60)
-        
-        # Create markdown files
-        print("\n📄 Creating draft files...")
-        draft_files = []
         for draft in drafts:
-            file_path = self.vscode_handler.create_draft_markdown(draft)
-            draft_files.append(file_path)
-            print(f"  ✓ {Path(file_path).name}")
-        
-        # Create approval requests
-        print("\n🔄 Creating approval requests...")
-        for draft in drafts:
-            self.vscode_handler.create_approval_request(draft)
-            print(f"  ✓ {draft['original_sender']}")
-        
-        # Save drafts as JSON
-        json_file = self.vscode_handler.save_draft_json(drafts)
-        print(f"\n💾 Drafts saved to: {json_file}")
-        
-        print("\n" + "-" * 60)
-        print("📌 NEXT STEPS:")
-        print("-" * 60)
-        print("1. Open the draft files (*.md) in VS Code")
-        print("2. Review each draft carefully")
-        print("3. Make any edits needed")
-        print("4. Run the verification script to send approved drafts")
-        print("\nNo emails are sent automatically - manual approval is required!")
-        print("=" * 60)
-        print()
+            message_id = self.gmail_handler.create_draft(
+                to=draft['original_sender'],
+                subject=draft['draft_subject'],
+                body=draft['draft_body'],
+            )
+            if message_id:
+                url = f"https://mail.google.com/mail/u/0/#drafts/{message_id}"
+                print(f"  Opening draft in Chrome: {url}")
+                chrome_paths = [
+                    "C:/Program Files/Google/Chrome/Application/chrome.exe %s",
+                    "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe %s",
+                ]
+                opened = False
+                for path in chrome_paths:
+                    try:
+                        webbrowser.get(path).open(url)
+                        opened = True
+                        break
+                    except Exception:
+                        continue
+                if not opened:
+                    webbrowser.open(url)  # fallback to default browser
+            else:
+                print(f"  ⚠ Failed to create Gmail draft for {draft['original_sender']}")
     
     def schedule_runs(self):
         """Schedule automatic runs at configured interval (default every 2 minutes)"""
@@ -152,21 +142,19 @@ class EmailAgent:
             self.present_drafts(drafts)
     
     def run_manual(self):
-        """Manually trigger email processing for the last 2 minutes"""
+        """Manually trigger email processing for the last 2 minutes."""
         print("\n🚀 Manual trigger started (last 2 minutes)")
         drafts = self.process_emails(minutes=2)
         if drafts:
             self.present_drafts(drafts)
         else:
             print("No new emails to process")
-    
+
     def run_scheduled(self):
-        """Run with scheduler"""
+        """Run with scheduler."""
         if not self.initialize():
             return
-        
         self.schedule_runs()
-        # check every 10 seconds to keep 2-min interval reliable
         try:
             self.scheduler.start_scheduler(interval=10)
         except KeyboardInterrupt:

@@ -42,20 +42,20 @@ class Config:
     def allowed_authors(self) -> list:
         """Get list of allowed email authors"""
         return self.config_data.get('allowedAuthors', [])
-    
+
     @property
     def draft_settings(self) -> dict:
-        """Get draft generation settings"""
+        """Get draft generation settings (matches config.json)"""
         return self.config_data.get('draftSettings', {})
-    
+
     @property
     def email_filters(self) -> dict:
-        """Get email filter settings"""
+        """Get email filter settings (matches config.json)"""
         return self.config_data.get('emailFilters', {})
-    
+
     @property
     def vscode_integration(self) -> dict:
-        """Get VS Code integration settings"""
+        """Get VS Code integration settings (matches config.json)"""
         return self.config_data.get('vscodeIntegration', {})
     
     def validate(self) -> bool:

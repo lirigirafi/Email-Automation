@@ -1,8 +1,6 @@
 {
   "allowedAuthors": [
-    "liri.girafi@gmail.com",
-    "Alljobs@alljob.co.il",
-    "אני"
+    "liri.girafi@gmail.com"
   ],
   "draftSettings": {
     "tone": "friendly_professional",

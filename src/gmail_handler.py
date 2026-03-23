@@ -11,6 +11,7 @@ from googleapiclient import discovery
 from typing import List, Optional, Dict
 import base64
 from email.mime.text import MIMEText
+from email.header import Header
 
 # Gmail API scopes
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
@@ -76,7 +77,7 @@ class GmailHandler:
             
             # Build query
             author_query = " OR ".join([f'from:{author}' for author in allowed_authors])
-            query = f'is:unread {author_query} newer_than:{minutes}m'
+            query = f'is:unread in:inbox ({author_query}) newer_than:{minutes}m'
             print(f"[DEBUG] Gmail query: {query}")
             
             # List messages
@@ -119,8 +120,8 @@ class GmailHandler:
             subject = self._get_header(headers, 'Subject')
             sender = self._get_header(headers, 'From')
             body = self._get_message_body(message['payload'])
-            has_attachments = message['payload'].get('parts') is not None
-            
+            has_attachments = self._has_real_attachments(message['payload'])
+
             print(f"[DEBUG] Message details: sender={sender}, subject={subject}, has_attachments={has_attachments}")
             # Skip if has attachments
             if has_attachments:
@@ -140,6 +141,16 @@ class GmailHandler:
             print(f"Error getting message details: {str(e)}")
             return None
     
+    def _has_real_attachments(self, payload: Dict) -> bool:
+        """Check if a message has real file attachments (not just multipart text/html parts)"""
+        for part in payload.get('parts', []):
+            if part.get('filename'):
+                return True
+            if part.get('parts'):
+                if self._has_real_attachments(part):
+                    return True
+        return False
+
     def _get_header(self, headers: List[Dict], name: str) -> str:
         """Extract header value by name"""
         for header in headers:
@@ -167,13 +178,20 @@ class GmailHandler:
         
         return ""
     
+    @staticmethod
+    def _extract_email(addr: str) -> str:
+        """Extract bare email address from strings like 'Name <email@x.com>'"""
+        import re
+        m = re.search(r'<([^>]+)>', addr)
+        return m.group(1).strip() if m else addr.strip()
+
     def create_draft(self, to: str, subject: str, body: str) -> Optional[str]:
         """Create a draft email (does not send)"""
         try:
-            message = MIMEText(body)
-            message['to'] = to
-            message['subject'] = subject
-            
+            message = MIMEText(body, 'plain', 'utf-8')
+            message['to'] = self._extract_email(to)
+            message['subject'] = Header(subject, 'utf-8')
+
             raw_message = base64.urlsafe_b64encode(
                 message.as_bytes()
             ).decode('utf-8')
@@ -188,9 +206,10 @@ class GmailHandler:
                 userId='me',
                 body=draft_object
             ).execute()
-            
-            print(f"✓ Draft created: {draft['id']}")
-            return draft['id']
+
+            message_id = draft.get('message', {}).get('id', '')
+            print(f"✓ Draft created: {draft['id']} (message={message_id})")
+            return message_id
             
         except Exception as e:
             print(f"Error creating draft: {str(e)}")
