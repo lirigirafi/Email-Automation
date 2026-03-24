@@ -3,10 +3,13 @@ Human-in-the-Loop Gmail Agent
 Main entry point and orchestration logic
 """
 import sys
+import os
 import argparse
 import webbrowser
 from pathlib import Path
 from typing import List
+
+_IS_LAMBDA = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
 
 # Add src to path
 sys.path.insert(0, str(Path(__file__).parent))
@@ -107,7 +110,7 @@ class EmailAgent:
         return drafts
     
     def present_drafts(self, drafts: List[dict]):
-        """Save each draft to Gmail and open it in the browser."""
+        """Save each draft to Gmail. Opens in browser when running locally."""
         if not drafts:
             return
         for draft in drafts:
@@ -118,38 +121,24 @@ class EmailAgent:
             )
             if message_id:
                 url = f"https://mail.google.com/mail/u/0/#drafts/{message_id}"
-                print(f"  Opening draft in Chrome: {url}")
-                chrome_paths = [
-                    "C:/Program Files/Google/Chrome/Application/chrome.exe %s",
-                    "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe %s",
-                ]
-                opened = False
-                for path in chrome_paths:
-                    try:
-                        webbrowser.get(path).open(url)
-                        opened = True
-                        break
-                    except Exception:
-                        continue
-                if not opened:
-                    webbrowser.open(url)  # fallback to default browser
+                print(f"  Draft ready: {url}")
+                if not _IS_LAMBDA:
+                    chrome_paths = [
+                        "C:/Program Files/Google/Chrome/Application/chrome.exe %s",
+                        "C:/Program Files (x86)/Google/Chrome/Application/chrome.exe %s",
+                    ]
+                    opened = False
+                    for path in chrome_paths:
+                        try:
+                            webbrowser.get(path).open(url)
+                            opened = True
+                            break
+                        except Exception:
+                            continue
+                    if not opened:
+                        webbrowser.open(url)
             else:
                 print(f"  ⚠ Failed to create Gmail draft for {draft['original_sender']}")
-    
-    def schedule_runs(self):
-        """Schedule automatic runs at 09:00 and 17:00 daily"""
-        print("⏰ Scheduling automated runs...")
-
-        self.scheduler.schedule_multiple(['09:00', '17:00'], self._scheduled_job)
-
-        print(f"\nScheduler watching (timezone: {self.config.timezone})")
-        print(f"Next run: {self.scheduler.get_next_run()}")
-    
-    def _scheduled_job(self):
-        """Job function for scheduled runs"""
-        drafts = self.process_emails()
-        if drafts:
-            self.present_drafts(drafts)
     
     def run_manual(self):
         """Manually trigger email processing since last run."""
@@ -161,14 +150,22 @@ class EmailAgent:
             print("No new emails to process")
 
     def run_scheduled(self):
-        """Run with scheduler."""
+        """Run with local scheduler (9am and 5pm). Not used on Lambda."""
         if not self.initialize():
             return
-        self.schedule_runs()
+        print("⏰ Scheduling automated runs...")
+        self.scheduler.schedule_multiple(['09:00', '17:00'], self._scheduled_job)
+        print(f"\nScheduler watching (timezone: {self.config.timezone})")
+        print(f"Next run: {self.scheduler.get_next_run()}")
         try:
-            self.scheduler.start_scheduler(interval=10)
+            self.scheduler.start_scheduler(interval=60)
         except KeyboardInterrupt:
             print("\n✓ Agent stopped")
+
+    def _scheduled_job(self):
+        drafts = self.process_emails()
+        if drafts:
+            self.present_drafts(drafts)
 
 
 def main():

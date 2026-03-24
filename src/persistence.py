@@ -1,40 +1,65 @@
 """
-Persistence layer for tracking processed emails
-Stores email IDs to prevent duplicate processing
+Persistence layer for tracking processed emails.
+Uses S3 when S3_BUCKET env var is set, otherwise local JSON file.
 """
 import json
+import os
 from pathlib import Path
 from datetime import datetime
 from typing import List, Dict, Optional
 
+_S3_BUCKET = os.environ.get("S3_BUCKET")
+_S3_KEY = os.environ.get("PROCESSED_EMAILS_S3_KEY", "processed_emails.json")
+
+_EMPTY_DB = {
+    "processed_emails": [],
+    "last_sync": None,
+    "last_run": None,
+    "total_processed": 0,
+}
+
 
 class EmailPersistence:
-    """Manages persistent storage of processed email metadata"""
-    
+    """Manages persistent storage of processed email metadata (S3 or local file)."""
+
     def __init__(self, db_path: str = "./data/processed_emails.json"):
-        self.db_path = Path(db_path)
-        self.db_path.parent.mkdir(parents=True, exist_ok=True)
-        self._ensure_db_exists()
-    
+        if _S3_BUCKET:
+            import boto3
+            self._s3 = boto3.client("s3")
+            self._bucket = _S3_BUCKET
+            self._key = _S3_KEY
+            self.db_path = None
+        else:
+            self._s3 = None
+            self.db_path = Path(db_path)
+            self.db_path.parent.mkdir(parents=True, exist_ok=True)
+            self._ensure_db_exists()
+
     def _ensure_db_exists(self):
-        """Create database file if it doesn't exist"""
-        if not self.db_path.exists():
-            self.db_path.write_text(json.dumps({
-                "processed_emails": [],
-                "last_sync": None,
-                "last_run": None,
-                "total_processed": 0
-            }, indent=2))
-    
+        if self.db_path and not self.db_path.exists():
+            self.db_path.write_text(json.dumps(_EMPTY_DB, indent=2))
+
     def _load_db(self) -> Dict:
-        """Load database from file"""
-        with open(self.db_path, 'r') as f:
+        if self._s3:
+            try:
+                obj = self._s3.get_object(Bucket=self._bucket, Key=self._key)
+                return json.loads(obj["Body"].read())
+            except self._s3.exceptions.NoSuchKey:
+                return dict(_EMPTY_DB)
+        with open(self.db_path, "r") as f:
             return json.load(f)
-    
+
     def _save_db(self, data: Dict):
-        """Save database to file"""
-        with open(self.db_path, 'w') as f:
-            json.dump(data, f, indent=2)
+        if self._s3:
+            self._s3.put_object(
+                Bucket=self._bucket,
+                Key=self._key,
+                Body=json.dumps(data, indent=2),
+                ContentType="application/json",
+            )
+        else:
+            with open(self.db_path, "w") as f:
+                json.dump(data, f, indent=2)
     
     def is_processed(self, email_id: str) -> bool:
         """Check if email has already been processed"""

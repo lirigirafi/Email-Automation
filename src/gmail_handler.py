@@ -1,7 +1,9 @@
 """
 Gmail API integration module
-Handles authentication, email fetching, and draft management
+Handles authentication, email fetching, and draft management.
+Token is stored in S3 when S3_BUCKET env var is set, otherwise local file.
 """
+import io
 import os
 import pickle
 from google.auth.transport.requests import Request
@@ -16,10 +18,14 @@ from email.header import Header
 # Gmail API scopes
 SCOPES = ['https://www.googleapis.com/auth/gmail.modify']
 
+_S3_BUCKET = os.environ.get("S3_BUCKET")
+_TOKEN_S3_KEY = os.environ.get("GMAIL_TOKEN_S3_KEY", "gmail_token.pickle")
+_IS_LAMBDA = bool(os.environ.get("AWS_LAMBDA_FUNCTION_NAME"))
+
 
 class GmailHandler:
     """Manages Gmail API interactions"""
-    
+
     def __init__(self, client_id: str, client_secret: str, redirect_uri: str):
         self.client_id = client_id
         self.client_secret = client_secret
@@ -27,39 +33,61 @@ class GmailHandler:
         self.service = None
         self.credentials = None
         self._token_file = './data/gmail_token.pickle'
-    
+
+    # ── token storage helpers ──────────────────────────────────────────────
+
+    def _load_token(self) -> Optional[Credentials]:
+        """Load token from S3 or local file."""
+        if _S3_BUCKET:
+            import boto3
+            s3 = boto3.client("s3")
+            try:
+                obj = s3.get_object(Bucket=_S3_BUCKET, Key=_TOKEN_S3_KEY)
+                return pickle.loads(obj["Body"].read())
+            except Exception:
+                return None
+        if os.path.exists(self._token_file):
+            with open(self._token_file, "rb") as f:
+                return pickle.load(f)
+        return None
+
+    def _save_token(self, creds: Credentials):
+        """Save token to S3 or local file."""
+        data = pickle.dumps(creds)
+        if _S3_BUCKET:
+            import boto3
+            s3 = boto3.client("s3")
+            s3.put_object(Bucket=_S3_BUCKET, Key=_TOKEN_S3_KEY, Body=data)
+        else:
+            os.makedirs(os.path.dirname(self._token_file), exist_ok=True)
+            with open(self._token_file, "wb") as f:
+                f.write(data)
+
+    # ── auth ───────────────────────────────────────────────────────────────
+
     def authenticate(self) -> bool:
-        """
-        Authenticate with Gmail API using OAuth2
-        Returns True if authentication successful
-        """
+        """Authenticate with Gmail API using OAuth2."""
         try:
-            # Try to load existing credentials
-            if os.path.exists(self._token_file):
-                with open(self._token_file, 'rb') as token:
-                    self.credentials = pickle.load(token)
-            
-            # If no valid credentials, perform OAuth2 flow
+            self.credentials = self._load_token()
+
             if not self.credentials or not self.credentials.valid:
                 if self.credentials and self.credentials.expired and self.credentials.refresh_token:
                     self.credentials.refresh(Request())
+                    self._save_token(self.credentials)
+                elif _IS_LAMBDA:
+                    print("ERROR: No valid Gmail token in S3. Run OAuth locally first, then upload the token.")
+                    return False
                 else:
                     flow = InstalledAppFlow.from_client_secrets_file(
-                        './credentials.json',
-                        SCOPES,
-                        redirect_uri=self.redirect_uri
+                        './credentials.json', SCOPES, redirect_uri=self.redirect_uri
                     )
                     self.credentials = flow.run_local_server(port=8080)
-                
-                # Save credentials for future use
-                with open(self._token_file, 'wb') as token:
-                    pickle.dump(self.credentials, token)
-            
-            # Build Gmail service
+                    self._save_token(self.credentials)
+
             self.service = discovery.build('gmail', 'v1', credentials=self.credentials)
             print("✓ Gmail authentication successful")
             return True
-            
+
         except Exception as e:
             print(f"✗ Gmail authentication failed: {str(e)}")
             return False

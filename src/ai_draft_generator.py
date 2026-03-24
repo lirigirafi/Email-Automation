@@ -4,9 +4,10 @@ Uses the local `claude` CLI (already authenticated via Claude Code) + DuckDuckGo
 to generate smart, context-aware email replies — no API key required.
 """
 import json
-import subprocess
+import os
 from typing import Dict
 
+import anthropic
 from ddgs import DDGS
 
 
@@ -38,12 +39,14 @@ SYSTEM_PROMPT = """You are a smart email assistant. When given an incoming email
 
 
 def _claude(prompt: str) -> str:
-    """Call `claude -p` and return the text output."""
-    result = subprocess.run(
-        ["claude", "-p", prompt],
-        capture_output=True, text=True, encoding="utf-8"
+    """Call the Anthropic API and return the text response."""
+    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from env
+    response = client.messages.create(
+        model="claude-sonnet-4-6",
+        max_tokens=2048,
+        messages=[{"role": "user", "content": prompt}],
     )
-    return result.stdout.strip()
+    return response.content[0].text.strip()
 
 
 def _search(query: str, max_results: int = 5) -> str:
