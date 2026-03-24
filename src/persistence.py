@@ -22,6 +22,7 @@ class EmailPersistence:
             self.db_path.write_text(json.dumps({
                 "processed_emails": [],
                 "last_sync": None,
+                "last_run": None,
                 "total_processed": 0
             }, indent=2))
     
@@ -65,6 +66,20 @@ class EmailPersistence:
         """Get timestamp of last sync"""
         db = self._load_db()
         return db.get("last_sync")
+
+    def save_last_run(self):
+        """Save the current time as the last run timestamp"""
+        db = self._load_db()
+        db["last_run"] = datetime.now().isoformat()
+        self._save_db(db)
+
+    def get_last_run(self) -> Optional[datetime]:
+        """Get the datetime of the last run, or None if never run"""
+        db = self._load_db()
+        value = db.get("last_run")
+        if value:
+            return datetime.fromisoformat(value)
+        return None
     
     def get_all_processed(self) -> List[str]:
         """Get list of all processed email IDs"""

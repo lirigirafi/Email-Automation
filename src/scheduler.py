@@ -29,7 +29,7 @@ class EmailScheduler:
             schedule.Job object
         """
         try:
-            job = schedule.at(time_str).do(job_func)
+            job = schedule.every().day.at(time_str).do(job_func)
             self.jobs.append(job)
             print(f"✓ Scheduled job at {time_str}")
             return job

@@ -56,22 +56,33 @@ class EmailAgent:
         print()
         return True
     
-    def process_emails(self, minutes: int = None) -> List[dict]:
+    def process_emails(self) -> List[dict]:
         """
         Main workflow:
-        1. Fetch new emails from allowed authors
+        1. Fetch new emails from allowed authors since last run
         2. Generate drafts
         3. Present to user for approval
         """
         print("📧 Processing emails...")
-        print(f"DEBUG allowedAuthors: {self.config.allowed_authors}")
         print(f"  Allowed authors: {len(self.config.allowed_authors)}")
-        # Use passed minutes or default to config interval
-        interval_minutes = minutes if minutes is not None else self.config.schedule_interval_minutes
+
+        # Determine how far back to look based on last run time
+        last_run = self.persistence.get_last_run()
+        if last_run:
+            import calendar
+            after_epoch = int(calendar.timegm(last_run.timetuple()))
+            print(f"  Checking since last run: {last_run.strftime('%Y-%m-%d %H:%M:%S')}")
+        else:
+            after_epoch = None
+            print("  No previous run found — checking all unread emails")
+
         emails = self.gmail_handler.get_filtered_emails(
             self.config.allowed_authors,
-            minutes=interval_minutes
+            after_epoch=after_epoch
         )
+        # Save run time now so next run won't re-check these emails
+        self.persistence.save_last_run()
+
         if not emails:
             print("  ✓ No new emails found")
             return []
@@ -126,12 +137,11 @@ class EmailAgent:
                 print(f"  ⚠ Failed to create Gmail draft for {draft['original_sender']}")
     
     def schedule_runs(self):
-        """Schedule automatic runs at configured interval (default every 2 minutes)"""
+        """Schedule automatic runs at 09:00 and 17:00 daily"""
         print("⏰ Scheduling automated runs...")
-        
-        interval = self.config.schedule_interval_minutes
-        self.scheduler.schedule_every_minutes(interval, self._scheduled_job)
-        
+
+        self.scheduler.schedule_multiple(['09:00', '17:00'], self._scheduled_job)
+
         print(f"\nScheduler watching (timezone: {self.config.timezone})")
         print(f"Next run: {self.scheduler.get_next_run()}")
     
@@ -142,9 +152,9 @@ class EmailAgent:
             self.present_drafts(drafts)
     
     def run_manual(self):
-        """Manually trigger email processing for the last 2 minutes."""
-        print("\n🚀 Manual trigger started (last 2 minutes)")
-        drafts = self.process_emails(minutes=2)
+        """Manually trigger email processing since last run."""
+        print("\n🚀 Manual trigger started")
+        drafts = self.process_emails()
         if drafts:
             self.present_drafts(drafts)
         else:

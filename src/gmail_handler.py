@@ -64,20 +64,22 @@ class GmailHandler:
             print(f"✗ Gmail authentication failed: {str(e)}")
             return False
     
-    def get_filtered_emails(self, allowed_authors: List[str], minutes: int = 120) -> List[Dict]:
+    def get_filtered_emails(self, allowed_authors: List[str], after_epoch: Optional[int] = None) -> List[Dict]:
         """
-        Fetch unread emails from allowed authors from the last N minutes.
+        Fetch unread emails from allowed authors received after after_epoch (Unix timestamp).
         Skips emails with attachments.
-        Adds detailed logging for debugging.
         """
         try:
             if not self.service:
                 print("ERROR: Not authenticated with Gmail")
                 return []
-            
+
             # Build query
             author_query = " OR ".join([f'from:{author}' for author in allowed_authors])
-            query = f'is:unread in:inbox ({author_query}) newer_than:{minutes}m'
+            if after_epoch:
+                query = f'is:unread in:inbox ({author_query}) after:{after_epoch}'
+            else:
+                query = f'is:unread in:inbox ({author_query})'
             print(f"[DEBUG] Gmail query: {query}")
             
             # List messages
